@@ -5,6 +5,8 @@ from typing import Any
 
 import pandas as pd
 
+from agents.llm import suggest_transformation
+
 
 STTM_COLUMNS = [
     "source_file", "source_column", "target_column", "transformation_logic",
@@ -13,34 +15,49 @@ STTM_COLUMNS = [
 VALID_APPROVAL_STATUSES = {"pending", "approved", "rejected"}
 
 
-def _suggestion(source: str, dtype: str, layer: str, key: bool) -> dict[str, Any]:
+def _suggestion(source: str, dtype: str, layer: str, key: bool, business_intent: str = "") -> dict[str, Any]:
     target = source.strip().lower().replace(" ", "_")
     logic = "trim text" if dtype == "object" else "copy source value"
     if layer == "silver":
         logic = "trim text; nulls retained unless business-approved otherwise" if dtype == "object" else "cast to inferred datatype"
     if layer == "gold":
         logic = "approved aggregate or join output; confirm business definition"
+    intent = business_intent.strip()
+    logic = suggest_transformation(source, dtype, layer, intent, logic)
+    if layer == "silver" and intent:
+        logic = f"{logic}; apply rules for business intent: {intent}"
+    business_rule = "Candidate key only; human approval required" if key else "Confirm with business owner"
+    if intent:
+        business_rule = f"{business_rule}; relevant to intent: {intent}"
     return {
         "source_column": source,
         "target_column": target,
         "transformation_logic": logic,
         "datatype": dtype,
         "nullable": "true",
-        "business_rule": "Candidate key only; human approval required" if key else "Confirm with business owner",
+        "business_rule": business_rule,
         "approval_status": "pending",
     }
 
 
-def generate_sttm(profile: dict[str, Any], layer: str, output_path: str | Path) -> pd.DataFrame:
+def generate_sttm(
+    profile: dict[str, Any],
+    layer: str,
+    output_path: str | Path,
+    business_intent: str = "",
+) -> pd.DataFrame:
     if layer not in {"bronze", "silver", "gold"}:
         raise ValueError(f"Unsupported STTM layer: {layer}")
     rows = []
     for file_profile in profile.get("files", []):
         keys = set(file_profile.get("likely_join_keys", []))
         for source, details in file_profile.get("columns", {}).items():
-            rows.append({"source_file": file_profile["file"], **_suggestion(source, details["dtype"], layer, source in keys)})
+            rows.append({
+                "source_file": file_profile["file"],
+                **_suggestion(source, details["dtype"], layer, source in keys, business_intent),
+            })
     if layer == "gold" and not rows:
-        rows.append({"source_file": "", **_suggestion("business_key", "string", layer, False)})
+        rows.append({"source_file": "", **_suggestion("business_key", "string", layer, False, business_intent)})
     frame = pd.DataFrame(rows, columns=STTM_COLUMNS)
     destination = Path(output_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -89,11 +106,16 @@ def approved_mappings(sttm_path: str | Path, source_file: str | Path) -> pd.Data
     return sttm[(sttm["source_file"] == source) & (sttm["approval_status"].str.lower() == "approved")].copy()
 
 
-def generate_gold_sttm(silver_paths: list[str | Path], output_path: str | Path) -> pd.DataFrame:
-    """Generate selectable Gold mappings without guessing joins or measures."""
+def generate_gold_sttm(
+    silver_paths: list[str | Path],
+    output_path: str | Path,
+    business_intent: str = "",
+) -> pd.DataFrame:
+    """Generate intent-aware selections and KPI suggestions for human approval."""
     rows: list[dict[str, Any]] = []
     for path in silver_paths:
         frame = pd.read_parquet(path, engine="pyarrow")
+        dimension = next((column for column in frame.columns if frame[column].dtype == "object"), "")
         for column in frame.columns:
             rows.append({
                 "source_file": str(Path(path)),
@@ -102,7 +124,7 @@ def generate_gold_sttm(silver_paths: list[str | Path], output_path: str | Path) 
                 "transformation_logic": "select approved Silver column",
                 "datatype": str(frame[column].dtype),
                 "nullable": str(bool(frame[column].isna().any())).lower(),
-                "business_rule": "No inferred join or aggregation; approve explicitly",
+                "business_rule": f"Select approved Silver column for intent: {business_intent}" if business_intent else "No inferred join or aggregation; approve explicitly",
                 "approval_status": "pending",
                 "operation": "select",
                 "aggregation": "",
@@ -112,6 +134,24 @@ def generate_gold_sttm(silver_paths: list[str | Path], output_path: str | Path) 
                 "left_source_file": "",
                 "right_source_file": "",
             })
+            if business_intent and dimension and pd.api.types.is_numeric_dtype(frame[column]) and column not in {"source_count"}:
+                rows.append({
+                    "source_file": str(Path(path)),
+                    "source_column": column,
+                    "target_column": f"{column}_by_{dimension}",
+                    "transformation_logic": f"sum {column} grouped by {dimension} for {business_intent}",
+                    "datatype": str(frame[column].dtype),
+                    "nullable": "false",
+                    "business_rule": f"Suggested KPI for business intent: {business_intent}; human approval required",
+                    "approval_status": "pending",
+                    "operation": "aggregate",
+                    "aggregation": "sum",
+                    "group_by": dimension,
+                    "join_key": "",
+                    "join_type": "",
+                    "left_source_file": "",
+                    "right_source_file": "",
+                })
     frame = pd.DataFrame(rows, columns=STTM_COLUMNS + [
         "operation", "aggregation", "group_by", "join_key", "join_type",
         "left_source_file", "right_source_file",

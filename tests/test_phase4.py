@@ -33,6 +33,17 @@ def test_reporter_runs_duckdb_and_writes_plotly_html(tmp_path):
     assert "36.0" in body
 
 
+def test_report_includes_business_intent_scope(tmp_path):
+    gold = tmp_path / "gold.parquet"
+    pd.DataFrame({"record_id": ["r1"], "sales_amount": [36.0], "source_count": [1]}).to_parquet(gold, index=False)
+    report = tmp_path / "reports" / "scoped.html"
+
+    create_report([str(gold)], report, "Narrative", "Review product performance")
+
+    assert "Analysis scope" in report.read_text(encoding="utf-8")
+    assert "Review product performance" in report.read_text(encoding="utf-8")
+
+
 def test_complete_synthetic_pipeline_writes_gold_report_and_trace(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     pipeline_settings = Settings(root_dir=tmp_path)

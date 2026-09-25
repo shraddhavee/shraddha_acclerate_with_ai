@@ -1,6 +1,6 @@
 # Retail Medallion Pipeline
 
-A Python 3.11-compatible retail CSV pipeline with Bronze, Silver, and Gold approval gates. Transformations are deterministic. Groq is optional and reserved for profiling interpretation, STTM suggestions, and report narrative; tests and the default pipeline run without an API key.
+A Python 3.11-compatible retail CSV pipeline with Bronze, Silver, and Gold approval gates. STTM suggestions and report narratives use an optional LangChain prompt chain backed by Groq, with deterministic intent-aware fallbacks when no API key is configured. Human approval remains required for generated contracts.
 
 ## Run
 
@@ -13,7 +13,7 @@ python cli.py path\to\sales.csv --intent "Review product performance" --auto-app
 streamlit run streamlit_app.py
 ```
 
-The normal workflow pauses after each generated STTM. Review and change `approval_status` to `approved` through the Streamlit controls or your own review process. Ambiguous joins and business rules remain pending rather than being guessed. `--auto-approve` is intended only for synthetic demos.
+The normal workflow pauses after each generated STTM. Review and change `approval_status` to `approved` through the interactive CLI or Streamlit controls. Silver rules and Gold KPI suggestions incorporate the supplied business intent; ambiguous joins and business rules remain pending rather than being guessed. `--auto-approve` is intended only for synthetic demos.
 
 ## Synthetic demo
 

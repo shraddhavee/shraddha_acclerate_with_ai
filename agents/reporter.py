@@ -30,7 +30,12 @@ def _chart_sections(frame: pd.DataFrame) -> str:
     return "".join(sections) or "<p>No numeric Gold measures were available for charting.</p>"
 
 
-def create_report(gold_paths: list[str], output_path: str | Path, narrative: str = "") -> str:
+def create_report(
+    gold_paths: list[str],
+    output_path: str | Path,
+    narrative: str = "",
+    business_intent: str = "",
+) -> str:
     if not gold_paths:
         raise ValueError("No Gold inputs available for reporting")
     frame = _read_gold(gold_paths)
@@ -56,6 +61,7 @@ def create_report(gold_paths: list[str], output_path: str | Path, narrative: str
 <html><head><meta charset='utf-8'><title>Retail Executive Report</title>
 <script src='https://cdn.plot.ly/plotly-2.35.2.min.js'></script></head>
 <body><main><h1>Retail Executive Report</h1>
+<h2>Analysis scope</h2><p>{html.escape(business_intent or 'General retail performance review')}</p>
 <p>{html.escape(narrative or 'Evidence-based summary generated from approved Gold data.')}</p>
 <h2>Data coverage</h2><p>Approved Gold records: <strong>{int(summary[0])}</strong>; distinct records: <strong>{int(summary[1])}</strong></p>
 <h2>Numeric evidence</h2><table><thead><tr><th>Measure</th><th>Total</th><th>Average</th><th>Minimum</th><th>Maximum</th></tr></thead>

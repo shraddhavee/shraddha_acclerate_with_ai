@@ -8,6 +8,22 @@ from core.config import settings
 from core.state import PipelineState
 
 
+def _approve_interactively(state: PipelineState) -> PipelineState:
+    handlers = {
+        "awaiting_bronze_approval": ("Bronze", approve_bronze),
+        "awaiting_silver_approval": ("Silver", approve_silver),
+        "awaiting_gold_approval": ("Gold", approve_gold),
+    }
+    while state.status in handlers:
+        layer, handler = handlers[state.status]
+        answer = input(f"Approve {layer} STTM and continue? [y/N]: ").strip().lower()
+        state = handler(state, answer in {"y", "yes"})
+        print(f"{state.status}: {state.report_path or state.sttm_gold_path or state.sttm_silver_path or state.sttm_bronze_path}")
+        if state.status.endswith("rejected"):
+            break
+    return state
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Retail medallion pipeline")
     parser.add_argument("files", nargs="*", help="Input CSV files")
@@ -30,6 +46,8 @@ def main() -> None:
         if state.status == "awaiting_gold_approval":
             state = approve_gold(state)
         print(f"{state.status}: {state.report_path}")
+    else:
+        _approve_interactively(state)
 
 
 if __name__ == "__main__":

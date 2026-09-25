@@ -64,6 +64,18 @@ def test_gold_sttm_and_approved_aggregation_produce_stable_ids(tmp_path):
     assert result["record_id"].tolist() == repeat["record_id"].tolist()
 
 
+def test_gold_sttm_uses_business_intent_for_kpi_suggestions(tmp_path):
+    silver = tmp_path / "silver.parquet"
+    pd.DataFrame({"product": ["Canvas Tote"], "sales_amount": [36.0]}).to_parquet(silver, index=False)
+
+    generated = generate_gold_sttm([silver], tmp_path / "gold_sttm.csv", "Review product performance")
+
+    kpis = generated[generated["operation"] == "aggregate"]
+    assert not kpis.empty
+    assert kpis.iloc[0]["aggregation"] == "sum"
+    assert "Review product performance" in kpis.iloc[0]["business_rule"]
+
+
 def test_gold_executes_only_explicit_join(tmp_path):
     left = tmp_path / "orders.parquet"
     right = tmp_path / "customers.parquet"

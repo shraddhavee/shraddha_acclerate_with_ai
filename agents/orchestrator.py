@@ -54,7 +54,7 @@ def profile_and_prepare(state: PipelineState) -> PipelineState:
         import json
         profile = json.loads(profile_path.read_text(encoding="utf-8"))
         state.decisions.append(profile_interpretation(profile))
-        generate_sttm(profile, "bronze", state.sttm_bronze_path)
+        generate_sttm(profile, "bronze", state.sttm_bronze_path, state.business_intent)
         state.status = "awaiting_bronze_approval"
         state.decisions.append("Bronze STTM generated; ambiguous rules remain pending human approval.")
         audit_event(state.run_id, "approval_requested", {"layer": "bronze"})
@@ -77,7 +77,7 @@ def approve_bronze(state: PipelineState, approved: bool = True) -> PipelineState
         import json
         profile = json.loads(Path(state.profile_path).read_text(encoding="utf-8"))
         state.sttm_silver_path = str(settings.data_dir / "sttm" / f"{state.run_id}_silver.csv")
-        generate_sttm(profile, "silver", state.sttm_silver_path)
+        generate_sttm(profile, "silver", state.sttm_silver_path, state.business_intent)
         _copy_sttm_source(state.sttm_silver_path, state.bronze_output_paths)
         state.status = "awaiting_silver_approval"
         state.decisions.append("Bronze Parquet created; Silver STTM awaits approval.")
@@ -98,7 +98,7 @@ def approve_silver(state: PipelineState, approved: bool = True) -> PipelineState
     with trace_step(state.run_id, "silver"):
         state.silver_output_paths = create_silver(state.bronze_output_paths, state.sttm_silver_path, settings.data_dir / "silver")
         state.sttm_gold_path = str(settings.data_dir / "sttm" / f"{state.run_id}_gold.csv")
-        generate_gold_sttm(state.silver_output_paths, state.sttm_gold_path)
+        generate_gold_sttm(state.silver_output_paths, state.sttm_gold_path, state.business_intent)
         state.status = "awaiting_gold_approval"
         state.decisions.append("Silver Parquet created; Gold STTM awaits approval.")
         _save_state(state)
@@ -118,7 +118,7 @@ def approve_gold(state: PipelineState, approved: bool = True) -> PipelineState:
         report_path = settings.data_dir / "reports" / f"{state.run_id}.html"
         fallback = f"Report for intent: {state.business_intent}. Metrics reflect approved Gold records only."
         narrative = generate_text("Write a concise evidence-based executive narrative for: " + fallback, fallback)
-        state.report_path = create_report(state.gold_output_paths, report_path, narrative)
+        state.report_path = create_report(state.gold_output_paths, report_path, narrative, state.business_intent)
         LocalMemory().remember(state.run_id, {"intent": state.business_intent, "report_path": state.report_path})
         state.status = "completed"
         state.decisions.append("Gold Parquet and executive report created from approved data.")
