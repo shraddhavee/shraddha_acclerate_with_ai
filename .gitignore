@@ -1,0 +1,17 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.streamlit/
+data/bronze/*.parquet
+data/silver/*.parquet
+data/gold/*.parquet
+data/sttm/*.csv
+data/profiles/*.json
+data/reports/*.html
+data/traces/*.jsonl
+data/traces/*_state.json
+data/memory.json
+data/uploads/
+*.log

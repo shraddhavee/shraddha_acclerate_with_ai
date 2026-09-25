@@ -1,0 +1,4 @@
+customer_id,customer_name,region,synthetic_source
+CUS-001,Ada Lovelace,North,true
+CUS-002,Grace Hopper,West,true
+CUS-003,Katherine Johnson,South,true

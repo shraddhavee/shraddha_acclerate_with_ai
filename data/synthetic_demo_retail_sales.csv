@@ -1,0 +1,4 @@
+order_id,product,order_date,quantity,sales_amount,synthetic_source
+SYN-001,Canvas Tote,2026-01-05,2,36.00,true
+SYN-002,Steel Bottle,2026-01-06,1,24.00,true
+SYN-003,Canvas Tote,2026-01-07,3,54.00,true
